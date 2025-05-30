@@ -4,18 +4,22 @@ from typing import List, Optional
 from ..models.database import get_db
 from ..models.car_part import CarPart
 from ..schemas.car_part import CarPartCreate, CarPart as CarPartSchema, CarPartUpdate
-from ..auth.jwt import verify_token, create_access_token
+from ..auth.jwt import verify_token, create_access_token, Token
 from fastapi.security import OAuth2PasswordBearer
+from pydantic import BaseModel
 
 router = APIRouter()
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
+class TokenRequest(BaseModel):
+    permissions: List[str]
+
 def get_current_user(token: str = Depends(oauth2_scheme)):
     return verify_token(token)
 
-@router.post("/token")
-async def login_for_access_token(permissions: List[str]):
-    access_token = create_access_token(data={"permissions": permissions})
+@router.post("/token", response_model=Token)
+async def login_for_access_token(request: TokenRequest):
+    access_token = create_access_token(data={"permissions": request.permissions})
     return {"access_token": access_token, "token_type": "bearer"}
 
 @router.get("/car-parts/", response_model=List[CarPartSchema])
