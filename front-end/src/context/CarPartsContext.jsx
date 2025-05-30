@@ -1,101 +1,90 @@
 import { createContext, useContext, useState, useEffect } from 'react'
+import * as api from '../services/api'
 
 const CarPartsContext = createContext()
 
-const initialParts = [
-  {
-    id: 1,
-    name: 'Ceramic Brake Pads',
-    category: 'Brakes',
-    price: 49.99,
-    description: 'High-performance ceramic brake pads for optimal stopping power and reduced brake dust',
-    image: 'https://www.brembo.com/en/PublishingImages/company/products/ricambi/pastiglie/pastiglie-ceramiche-brembo.jpg',
-    inStock: true,
-    likes: 0,
-  },
-  {
-    id: 2,
-    name: 'Premium Oil Filter',
-    category: 'Engine',
-    price: 12.99,
-    description: 'Premium oil filter with advanced filtration technology for maximum engine protection',
-    image: 'https://shop.advanceautoparts.com/wcsstore/CVWEB/Attachment/staticbusinesscontent/image/landing/oil-change/2021/oil-filter-guide-hero.jpg',
-    inStock: true,
-    likes: 0,
-  },
-  {
-    id: 3,
-    name: 'NGK Iridium Spark Plugs Set',
-    category: 'Engine',
-    price: 24.99,
-    description: 'Set of 4 high-performance iridium spark plugs for improved fuel efficiency and engine response',
-    image: 'https://m.media-amazon.com/images/I/81vkPJx9JVL._AC_UF1000,1000_QL80_.jpg',
-    inStock: false,
-    likes: 0,
-  },
-  {
-    id: 4,
-    name: 'Performance Air Filter',
-    category: 'Engine',
-    price: 39.99,
-    description: 'High-flow performance air filter for improved engine breathing and horsepower',
-    image: 'https://www.knfilters.com/media/wysiwyg/KNFilters/air-filter-cover.jpg',
-    inStock: true,
-    likes: 0,
-  },
-  {
-    id: 5,
-    name: 'LED Headlight Kit',
-    category: 'Lighting',
-    price: 129.99,
-    description: 'Ultra-bright LED headlight conversion kit with 6000K white light output',
-    image: 'https://www.oracle-lighting.com/cdn/shop/products/9005-LED-Headlight-Bulbs-6000K-White-Light-Oracle-Lighting_1024x1024.jpg',
-    inStock: true,
-    likes: 0,
-  },
-  {
-    id: 6,
-    name: 'Performance Brake Rotors',
-    category: 'Brakes',
-    price: 89.99,
-    description: 'Cross-drilled and slotted performance brake rotors for improved cooling and braking performance',
-    image: 'https://www.powerstop.com/wp-content/uploads/2020/03/Z36-Truck-_-Tow-Brake-Kit_Header.jpg',
-    inStock: true,
-    likes: 0,
-  }
-]
-
 export function CarPartsProvider({ children }) {
-  const [parts, setParts] = useState(() => {
-    const savedParts = localStorage.getItem('carParts')
-    return savedParts ? JSON.parse(savedParts) : initialParts
-  })
+  const [parts, setParts] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
+  const [page, setPage] = useState(0)
+  const [hasMore, setHasMore] = useState(true)
+
+  const loadParts = async (reset = false) => {
+    try {
+      setLoading(true)
+      setError(null)
+      const skip = reset ? 0 : page * 10
+      const newParts = await api.getCarParts(skip, 10)
+      setParts(prev => reset ? newParts : [...prev, ...newParts])
+      setHasMore(newParts.length === 10)
+      if (!reset) {
+        setPage(prev => prev + 1)
+      }
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setLoading(false)
+    }
+  }
 
   useEffect(() => {
-    localStorage.setItem('carParts', JSON.stringify(parts))
-  }, [parts])
+    // Try to login with READ and WRITE permissions
+    const initialize = async () => {
+      try {
+        await api.login(['READ', 'WRITE'])
+        await loadParts(true)
+      } catch (err) {
+        setError('Failed to initialize: ' + err.message)
+      }
+    }
+    initialize()
+  }, [])
 
-  const addPart = (newPart) => {
-    setParts(currentParts => [...currentParts, { ...newPart, id: Date.now(), likes: 0 }])
+  const addPart = async (newPart) => {
+    try {
+      const createdPart = await api.createCarPart(newPart)
+      setParts(prev => [...prev, createdPart])
+    } catch (err) {
+      setError(err.message)
+      throw err
+    }
   }
 
-  const removePart = (id) => {
-    setParts(currentParts => currentParts.filter(part => part.id !== id))
+  const removePart = async (id) => {
+    try {
+      await api.deleteCarPart(id)
+      setParts(prev => prev.filter(part => part.id !== id))
+    } catch (err) {
+      setError(err.message)
+      throw err
+    }
   }
 
-  const toggleLike = (id) => {
-    setParts(currentParts =>
-      currentParts.map(part =>
-        part.id === id ? { ...part, likes: part.likes + 1 } : part
+  const toggleLike = async (id) => {
+    try {
+      const updatedPart = await api.likeCarPart(id)
+      setParts(prev =>
+        prev.map(part =>
+          part.id === id ? updatedPart : part
+        )
       )
-    )
+    } catch (err) {
+      setError(err.message)
+      throw err
+    }
   }
 
   const value = {
     parts,
+    loading,
+    error,
+    hasMore,
     addPart,
     removePart,
     toggleLike,
+    loadMore: () => loadParts(),
+    refresh: () => loadParts(true),
   }
 
   return (
