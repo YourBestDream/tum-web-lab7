@@ -35,23 +35,53 @@ export const login = async (permissions) => {
     return data;
 };
 
+// Helper function to handle 401 errors
+const handleUnauthorized = async () => {
+    // Try to refresh the token
+    try {
+        await login(['READ', 'WRITE']);
+        return true;
+    } catch (err) {
+        clearToken();
+        return false;
+    }
+};
+
+// Wrapper for fetch that handles 401 errors
+const fetchWithAuth = async (url, options = {}) => {
+    const response = await fetch(url, {
+        ...options,
+        headers: headers(),
+    });
+
+    if (response.status === 401) {
+        const refreshed = await handleUnauthorized();
+        if (refreshed) {
+            // Retry the request with the new token
+            return fetch(url, {
+                ...options,
+                headers: headers(),
+            });
+        }
+    }
+
+    return response;
+};
+
 export const getCarParts = async (skip = 0, limit = 10, category = null) => {
     const url = new URL(`${API_URL}/car-parts/`);
     url.searchParams.append('skip', skip);
     url.searchParams.append('limit', limit);
     if (category) url.searchParams.append('category', category);
 
-    const response = await fetch(url, {
-        headers: headers(),
-    });
+    const response = await fetchWithAuth(url);
     if (!response.ok) throw new Error('Failed to fetch car parts');
     return response.json();
 };
 
 export const createCarPart = async (carPart) => {
-    const response = await fetch(`${API_URL}/car-parts/`, {
+    const response = await fetchWithAuth(`${API_URL}/car-parts/`, {
         method: 'POST',
-        headers: headers(),
         body: JSON.stringify(carPart),
     });
     if (!response.ok) throw new Error('Failed to create car part');
@@ -59,9 +89,8 @@ export const createCarPart = async (carPart) => {
 };
 
 export const updateCarPart = async (id, carPart) => {
-    const response = await fetch(`${API_URL}/car-parts/${id}`, {
+    const response = await fetchWithAuth(`${API_URL}/car-parts/${id}`, {
         method: 'PUT',
-        headers: headers(),
         body: JSON.stringify(carPart),
     });
     if (!response.ok) throw new Error('Failed to update car part');
@@ -69,18 +98,16 @@ export const updateCarPart = async (id, carPart) => {
 };
 
 export const deleteCarPart = async (id) => {
-    const response = await fetch(`${API_URL}/car-parts/${id}`, {
+    const response = await fetchWithAuth(`${API_URL}/car-parts/${id}`, {
         method: 'DELETE',
-        headers: headers(),
     });
     if (!response.ok) throw new Error('Failed to delete car part');
     return null;
 };
 
 export const likeCarPart = async (id) => {
-    const response = await fetch(`${API_URL}/car-parts/${id}/like`, {
+    const response = await fetchWithAuth(`${API_URL}/car-parts/${id}/like`, {
         method: 'POST',
-        headers: headers(),
     });
     if (!response.ok) throw new Error('Failed to like car part');
     return response.json();
