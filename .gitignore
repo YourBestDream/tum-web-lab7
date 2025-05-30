@@ -2,7 +2,7 @@
 __pycache__/
 *.py[cod]
 *$py.class
-
+cursor_build_a_react_app_for_car_parts.md
 # C extensions
 *.so
 
