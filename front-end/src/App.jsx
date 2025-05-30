@@ -8,7 +8,17 @@ import Filters from './components/Filters'
 import CurrencySelector from './components/CurrencySelector'
 
 function AppContent() {
-  const { parts, addPart, removePart, toggleLike } = useCarParts()
+  const { 
+    parts, 
+    loading, 
+    error, 
+    hasMore,
+    addPart, 
+    removePart, 
+    toggleLike,
+    loadMore,
+    refresh
+  } = useCarParts()
   const [showAddForm, setShowAddForm] = useState(false)
   const [darkMode, setDarkMode] = useState(false)
   const [filteredParts, setFilteredParts] = useState(parts)
@@ -68,6 +78,23 @@ function AppContent() {
 
   const categories = [...new Set(parts.map(part => part.category))]
 
+  // Handle infinite scroll
+  useEffect(() => {
+    const handleScroll = () => {
+      if (
+        window.innerHeight + document.documentElement.scrollTop
+        === document.documentElement.offsetHeight
+      ) {
+        if (!loading && hasMore) {
+          loadMore()
+        }
+      }
+    }
+
+    window.addEventListener('scroll', handleScroll)
+    return () => window.removeEventListener('scroll', handleScroll)
+  }, [loading, hasMore, loadMore])
+
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-300">
       <header className="bg-white dark:bg-gray-800 shadow transition-colors duration-300">
@@ -101,12 +128,28 @@ function AppContent() {
       </header>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {error && (
+          <div className="mb-4 p-4 bg-red-100 border border-red-400 text-red-700 rounded">
+            {error}
+            <button
+              onClick={refresh}
+              className="ml-4 text-red-700 underline"
+            >
+              Retry
+            </button>
+          </div>
+        )}
+
         {showAddForm && (
           <div className="mb-8 animate-fadeIn">
             <AddPartForm
-              onAdd={(newPart) => {
-                addPart(newPart)
-                setShowAddForm(false)
+              onAdd={async (newPart) => {
+                try {
+                  await addPart(newPart)
+                  setShowAddForm(false)
+                } catch (err) {
+                  // Error is handled by the context
+                }
               }}
             />
           </div>
@@ -121,9 +164,27 @@ function AppContent() {
 
         <PartsGrid
           parts={filteredParts}
-          onLike={toggleLike}
-          onRemove={removePart}
+          onLike={async (id) => {
+            try {
+              await toggleLike(id)
+            } catch (err) {
+              // Error is handled by the context
+            }
+          }}
+          onRemove={async (id) => {
+            try {
+              await removePart(id)
+            } catch (err) {
+              // Error is handled by the context
+            }
+          }}
         />
+
+        {loading && (
+          <div className="text-center py-4">
+            <div className="inline-block animate-spin rounded-full h-8 w-8 border-4 border-gray-300 border-t-blue-600"></div>
+          </div>
+        )}
       </main>
     </div>
   )
